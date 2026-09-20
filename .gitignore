@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+#python
+__pycache__/
+.ipynb_checkpoints/
+.secrets/
+
+#virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Streamlit
+.streamlit/cache/
+.streamlit/secrets.toml
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# Generated simulation outputs
+outputs/
+output/
+results/
