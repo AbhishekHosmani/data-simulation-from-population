@@ -103,21 +103,17 @@ with population_tab:
     # ============================================================
 
     events = st.session_state.events[
-        st.session_state.events["archetype"].isin(selected_archetypes)
-    ].copy()
+        st.session_state.events["archetype"].isin(selected_archetypes)].copy()
 
     timeline = st.session_state.timeline[
-        st.session_state.timeline["archetype"].isin(selected_archetypes)
-    ].copy()
+        st.session_state.timeline["archetype"].isin(selected_archetypes)].copy()
 
     driving = st.session_state.driving[
-        st.session_state.driving["archetype"].isin(selected_archetypes)
-    ].copy()
+        st.session_state.driving["archetype"].isin(selected_archetypes)].copy()
     
     st.subheader("Population behaviour")
     st.caption(
-        "Explore variation in charging behaviour across the simulated EV population."
-    )
+        "Explore variation in charging behaviour across the simulated EV population.")
 
     events = st.session_state.events[
         st.session_state.events["archetype"].isin(selected_archetypes)].copy()
@@ -164,30 +160,14 @@ with population_tab:
     # Because the simulation is at 30-minute resolution, max() means
     # the agent counts as plugged in if they were connected during
     # either timestep within the hour.
-    agent_hour = (
-        timeline
-        .groupby(
-            ["date", "hour", "agent_id"],
-            as_index=False,
-        )["plugged_in"]
-        .max()
+    agent_hour = (timeline.groupby(["date", "hour", "agent_id"],as_index=False)["plugged_in"].max()
     )
 
     # Number of plugged-in agents for each day/hour
-    daily_hourly = (
-        agent_hour
-        .groupby(
-            ["date", "hour"],
-            as_index=False,
-        )["plugged_in"]
-        .sum()
-    )
+    daily_hourly = (agent_hour
+        .groupby(["date", "hour"],as_index=False)["plugged_in"].sum())
 
-    daily_hourly["pct_plugged"] = (
-        daily_hourly["plugged_in"]
-        / n_agents
-        * 100
-    )
+    daily_hourly["pct_plugged"] = ((daily_hourly["plugged_in"] / n_agents) * 100)
 
     # Calculate mean and population variation across simulated days
     population_hourly = (
@@ -368,7 +348,6 @@ with population_tab:
         # Copy observations +/- 24 hours so that observations
         # around midnight are treated as being close together.
         # --------------------------------------------------------
-
         wrapped_values = np.concatenate([
             values - 24,
             values,
@@ -430,6 +409,7 @@ with population_tab:
         fig_time,
         width="stretch",
     )
+    
     # ============================================================
     # 3. VARIATION BY ARCHETYPE
     # ============================================================
@@ -772,9 +752,7 @@ with indivisual_tab:
             hide_index=True,
         )
     else:
-        st.info(
-            "This agent did not plug in on the selected date."
-        )
+        st.info("This agent did not plug in on the selected date.")
 
 with flexibility_tab:
     hourly = timeline.assign(hour=timeline.timestamp.dt.hour).groupby('hour', as_index=False).agg(

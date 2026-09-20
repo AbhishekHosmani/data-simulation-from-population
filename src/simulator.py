@@ -33,9 +33,7 @@ def _sample_wrapped_hour(random_number_generator, mean, sd) -> float:
     Sample a decimal hour from a normal distribution and
     wrap the result onto a 24-hour clock.
     """
-    return float(
-        random_number_generator.normal(mean, sd) % 24
-    )
+    return float(random_number_generator.normal(mean, sd) % 24)
 
 
 def _timestamp_for_hour(day: pd.Timestamp, hour: float) -> pd.Timestamp:
@@ -51,7 +49,6 @@ def _timestamp_for_hour(day: pd.Timestamp, hour: float) -> pd.Timestamp:
     if m == 60:
         h = (h + 1) % 24
         m = 0
-
     return (day.normalize()+pd.Timedelta(hours=h, minutes=m))
 
 
@@ -62,21 +59,17 @@ def _positive_lognormal(random_number_generator, mean: float, coeff_of_variation
     """
     if mean <= 0:
         return 0.0
-
+    
     sigma2 = np.log(1 + coeff_of_variation * coeff_of_variation)
     mu = np.log(mean) - sigma2 / 2
-
     return float(random_number_generator.lognormal(mu, np.sqrt(sigma2)))
 
 
 class EVSimulator:
     """
     Agent-based EV simulator.
-
     Each agent receives a persistent archetype plus small persistent
-    behavioural offsets.
-
-    Driving consumes battery SoC. Charging replenishes SoC.
+    behavioural offsets. Driving consumes battery SoC. Charging replenishes SoC.
 
     Importantly, SoC persists between simulation days.
     """
@@ -147,14 +140,13 @@ class EVSimulator:
         Simulate an EV driver's battery consumption for one day.
 
         Returns a timestep-level DataFrame showing:
-
-            timestamp
-            agent_id
-            archetype
-            miles_driven
-            energy_used_kwh
-            soc_consumed
-            soc
+            -timestamp
+            -agent_id
+            -archetype
+            -miles_driven
+            -energy_used_kwh
+            -soc_consumed
+            -soc
 
         SoC decreases when trips occur.
         """
@@ -180,8 +172,7 @@ class EVSimulator:
             daily_miles = _positive_lognormal(
                 self.random_number_generator,
                 expected_daily_miles,
-                coeff_of_variation=0.35
-            )
+                coeff_of_variation=0.35)
 
         daily_miles = max(0.0,float(daily_miles))
 
@@ -483,20 +474,13 @@ class EVSimulator:
 
         timeline_df = self._make_timeline(charging_df)
 
-        return (
-            charging_df,
-            driving_df,
-            timeline_df,
-        )
+        return (charging_df, driving_df, timeline_df)
 
     # ==========================================================
     # CHARGING TIMELINE
     # ==========================================================
 
-    def _make_timeline(
-        self,
-        events: pd.DataFrame,
-    ) -> pd.DataFrame:
+    def _make_timeline(self, events: pd.DataFrame) -> pd.DataFrame:
         """
         Expand charging events into timestep-level
         plugged-in observations.
@@ -513,20 +497,12 @@ class EVSimulator:
         ]
 
         if events.empty:
-            return pd.DataFrame(
-                columns=columns
-            )
+            return pd.DataFrame(columns=columns)
 
         rows = []
+        freq = (f"{self.cfg.timestep_minutes}min")
 
-        freq = (
-            f"{self.cfg.timestep_minutes}min"
-        )
-
-        for event in events.itertuples(
-            index=False
-        ):
-
+        for event in events.itertuples(index=False):
             times = pd.date_range(
                 event.plug_in.floor(freq),
                 event.plug_out.ceil(freq),
