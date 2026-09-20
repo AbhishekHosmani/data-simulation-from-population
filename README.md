@@ -1,0 +1,147 @@
+# Axle EV Behaviour Simulator
+
+A small agent-based EV driver simulator for the Axle Data Science take-home. It uses the six supplied Axle archetypes as the population configuration and generates stochastic individual plug-in events plus half-hourly state traces.
+
+## Design
+
+Each agent is assigned one archetype according to `% of population`. The archetype supplies battery, efficiency, charger, plug-in frequency, typical plug-in/out times, target SoC, plug-in SoC and energy-per-plug-in anchors. Agents receive persistent personal offsets, then day-level randomness is sampled around those characteristics. This creates variation both **between drivers** and **within a driver's days**.
+
+For each simulated plug event the engine:
+1. decides whether the agent plugs in from archetype frequency;
+2. samples plug-in/out times around the agent's persistent schedule;
+3. samples energy need around the archetype kWh/plug-in;
+4. combines the energy-implied SoC with the archetype SoC anchor and stochastic variation;
+5. computes energy needed to target SoC, charging duration, end SoC and flexible idle time;
+6. expands the event into a half-hourly timeline for visualisation.
+
+The engine is independent of Streamlit so it can later be exposed through FastAPI or used by optimisation/forecasting jobs without changing simulation logic.
+
+## Assumptions
+
+- The supplied six archetypes are treated as calibration anchors, not deterministic users.
+- Plug-in frequency <=1 is interpreted as the probability of one plug event on a day (e.g. 0.2 ≈ once every five days).
+- Plug-in/out clock times have configurable Gaussian day-to-day noise and wrap around midnight.
+- Energy per plug-in is lognormally distributed around the supplied mean.
+- Plug-in SoC is informed by both energy-to-target and the supplied archetype plug-in SoC. This keeps sessions physically plausible while retaining the provided behavioural anchor.
+- Charging begins immediately in this MVP. Smart scheduling is deliberately separated from **availability/flexibility**; it is a natural extension for the pair-programming stage.
+- `Always plugged-in` is represented by its supplied 00:00–23:59 window, with small timing noise. In a production model this archetype could instead use explicit continuous connection state.
+- The Centre for Net Zero report is used only as a population-level reasonableness check; its Intelligent Octopus early-adopter sample is not assumed to represent the entire UK population.
+
+## Run
+
+```bash
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\\Scripts\\activate
+pip install -r requirements.txt
+streamlit run dashboard/app.py
+```
+
+Or generate CSV outputs without the UI:
+
+```bash
+python run_simulation.py
+```
+
+Tests:
+
+```bash
+pytest -q
+```
+
+## Dashboard
+
+- Population distributions: plug-in time, SoC, duration by archetype
+- Individual-agent SoC/plugged-in timeline
+- Flexibility: available agents, charging load, flexible hours
+- Validation: simulation vs selected CNZ summary statistics
+- CSV download of generated plug events
+
+## Suggested next extensions
+
+1. Calibrate distribution widths from raw telemetry when available.
+2. Model explicit trips and derive SoC from trip distance rather than partially anchoring it to kWh/plug-in.
+3. Add weekday/weekend schedules and correlated behaviours.
+4. Add smart-charge scheduling in half-hour blocks against price/carbon signals.
+5. Add bump-charge/override behaviour.
+6. Expose the engine through FastAPI only when multiple clients need it.
+
+## Notes:
+1. Our first objective is to use population characteristics to:
+    * First simulate X agents, and for each agent simulate their daily driving behaviour 
+    * Using their driving behaviour predict their energy consumption. Their driving decides their plug-in and plug-out time as well as SoC
+
+
+## Limitations / Future Work:
+1. Need different behaviour between weekday and weekend.
+2. Currently plug-in decision is happending based on random draw from Bernoulli Distibution. Need a more sophesticated model to predict plug-in behaviour based on archetype and driving behaviour. 
+3. An agent can only plug-in once per day.
+
+
+## Design Decisions, Assumptions and Trade-offs
+
+### Decisions made during development
+
+I designed the simulator around a population of individual EV drivers sampled from the provided archetypes. Each simulated driver inherits characteristics such as annual mileage, battery capacity, charging frequency, typical plug-in/plug-out times and target SoC from their archetype.
+
+The simulation is stateful at the individual-driver level. An agent's SoC is carried forward from one day to the next:
+
+`Previous SoC → Driving → Energy consumed → Plug-in decision → Charging → Updated SoC`
+
+Driving is simulated at 30-minute intervals. Daily mileage is sampled around the archetype's annual mileage assumption and distributed across a small number of trips. Driving consumes energy according to vehicle efficiency and battery capacity, which allows plug-in SoC to emerge from the simulated behaviour rather than being independently sampled each day.
+
+Charging sessions are then generated using the archetype's charging frequency and typical plug-in behaviour. Charging is constrained by the vehicle's battery capacity, charger power, target SoC and the amount of time the vehicle remains plugged in.
+
+I deliberately kept archetypes configuration-driven. `_make_agents()` samples from the rows in the archetype configuration rather than hard-coding individual archetype names. Therefore, a new archetype can be introduced by adding a new configuration row and assigning an appropriate population weight, without changing the agent-generation logic.
+
+### Assumptions
+
+The supplied archetypes describe population-level behaviour rather than complete individual travel histories, so several assumptions are required to turn them into an agent-based simulation.
+
+- Annual mileage is converted into an expected daily mileage and random variation is added between days.
+- Drivers make a small number of trips per day, with two trips being the most common case. This is a modelling assumption rather than a parameter directly provided by the archetype data.
+- Trip times are approximated using plausible daily travel patterns rather than attempting to build a detailed transport-demand model.
+- Plug-in and plug-out times vary around the archetype averages so that all agents within an archetype do not behave identically.
+- `plug_frequency_per_day` is currently interpreted as the probability that an agent plugs in on a given day, meaning the model generates at most one charging session per agent per day.
+- Charging power is assumed to remain constant during a charging session until the target SoC is reached.
+- SoC is constrained to the physical range of 0–100%.
+- Behavioural distributions and noise parameters are intentionally exposed/configurable so they can be recalibrated if richer observed data becomes available.
+
+These assumptions prioritise interpretable population behaviour over modelling every aspect of an individual's journey.
+
+### Where I spent time
+
+I prioritised the parts of the simulation that directly determine the required outputs: **when a driver plugs in and their battery SoC when they plug in**.
+
+In particular, I focused on:
+
+1. Generating a heterogeneous population from the supplied archetypes.
+2. Maintaining SoC as state across multiple days.
+3. Connecting driving behaviour to energy consumption and therefore plug-in SoC.
+4. Modelling realistic variation in plug-in and plug-out times.
+5. Ensuring charging is physically constrained by battery capacity, charger power and available plug-in time.
+6. Producing both event-level and time-series outputs that can be inspected and validated.
+7. Building an interactive dashboard to make individual-agent and population-level behaviour easy to explore.
+
+I spent less time modelling detailed journey behaviour such as road type, journey purpose, traffic, temperature, vehicle-specific charging curves or geographic travel patterns. These would add complexity but are secondary to the main objective of modelling EV availability and SoC at plug-in.
+
+### Design for the end use
+
+I treated the simulator as a tool that could eventually support analysis of EV charging flexibility rather than as a one-off synthetic-data script.
+
+The system therefore separates:
+
+`Configuration → Agent generation → Driving simulation → SoC state → Charging simulation → Outputs / Dashboard`
+
+This separation makes the model easier to extend and calibrate. For example, additional archetypes can be added through configuration, simulation parameters can be adjusted without rewriting the core logic, and individual components could later be replaced with models learned from observed data.
+
+The simulator produces detailed agent-level records in addition to aggregate statistics. This is important because downstream applications may need to answer questions such as:
+
+- How many EVs are plugged in at a particular time?
+- What is the distribution of SoC when vehicles connect?
+- How much energy does each vehicle require?
+- How long is a vehicle connected but not actively charging?
+- How much flexible charging capacity exists across the population?
+
+The Streamlit dashboard provides a lightweight way to inspect these behaviours at both the individual-driver and population level. In a production setting, the same simulation outputs could instead feed forecasting, optimisation or smart-charging systems.
+
+Overall, I prioritised a model that is **interpretable, configurable and extensible**, while keeping assumptions explicit so that they can be replaced or calibrated as higher-quality behavioural data becomes available.
