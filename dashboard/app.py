@@ -1,5 +1,7 @@
 from pathlib import Path
 import sys
+import numpy as np
+from scipy.stats import gaussian_kde
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -265,24 +267,18 @@ with population_tab:
     # ============================================================
     # 2. VARIATION ACROSS INDIVIDUAL DRIVERS
     # ============================================================
+# ============================================================
+# Plug-in SoC probability distribution by archetype
+# ============================================================
 
-    st.subheader("Variation across EV drivers")
-
-    st.caption(
-        "Drivers have different charging behaviour due to their "
-        "archetype and individual behavioural variation."
-    )
-
-
-
-    # Aggregate charging behaviour to the individual driver level
-    driver_stats = (events.groupby(["agent_id", "archetype"], as_index=False)
+    driver_stats = (
+        events
+        .groupby(
+            ["agent_id", "archetype"],
+            as_index=False,
+        )
         .agg(
             avg_plugin_soc=("plug_in_soc", "mean"),
-            avg_plugin_hour=("plug_in_hour", "mean"),
-            avg_daily_miles=("daily_miles", "mean"),
-            avg_energy_kwh=("energy_delivered_kwh", "mean"),
-            avg_plug_duration=("plug_duration_hours", "mean"),
         )
     )
 
@@ -290,26 +286,148 @@ with population_tab:
         driver_stats["avg_plugin_soc"] * 100
     )
 
+    fig_soc = go.Figure()
 
-    fig_soc = px.histogram(
-        driver_stats,
-        x="avg_plugin_soc_pct",
-        nbins=25,
-        title="Plug-in SoC across drivers",
-        labels={
-            "avg_plugin_soc_pct": "Average plug-in SoC (%)"
-        },
-    )
+    # Common X-axis for every archetype
+    x_grid = np.linspace(0, 100, 500)
+
+    for archetype in selected_archetypes:
+
+        values = driver_stats.loc[
+            driver_stats["archetype"] == archetype,
+            "avg_plugin_soc_pct",
+        ].dropna().values
+
+        # KDE requires multiple observations with some variation
+        if len(values) < 2 or np.std(values) == 0:
+            continue
+
+        kde = gaussian_kde(values)
+
+        density = kde(x_grid)
+
+        fig_soc.add_trace(
+            go.Scatter(
+                x=x_grid,
+                y=density,
+                mode="lines",
+                name=archetype,
+                line=dict(
+                    width=3,
+                ),
+            )
+        )
 
     fig_soc.update_layout(
-        template="plotly_dark",
+        title="Plug-in SoC distribution by archetype",
         xaxis_title="Average plug-in SoC (%)",
-        yaxis_title="Number of drivers",
-        showlegend=False,
+        yaxis_title="Probability density",
+        template="plotly_dark",
+        hovermode="x unified",
+    )
+
+    fig_soc.update_xaxes(
+        range=[0, 100],
+        dtick=10,
+    )
+
+    fig_soc.update_yaxes(
+        rangemode="tozero",
     )
 
     st.plotly_chart(
         fig_soc,
+        width="stretch",
+    )
+    # ============================================================
+    # Plug-in time probability distribution by archetype
+    # ============================================================
+
+    fig_time = go.Figure()
+
+    # Evaluate density from 0:00 to 24:00
+    x_grid = np.linspace(0, 24, 500)
+
+    for archetype in selected_archetypes:
+
+        values = (
+            events.loc[
+                events["archetype"] == archetype,
+                "plug_in_hour",
+            ]
+            .dropna()
+            .values
+        )
+
+        if len(values) < 2 or np.std(values) == 0:
+            continue
+
+        # --------------------------------------------------------
+        # Circular KDE
+        #
+        # Copy observations +/- 24 hours so that observations
+        # around midnight are treated as being close together.
+        # --------------------------------------------------------
+
+        wrapped_values = np.concatenate([
+            values - 24,
+            values,
+            values + 24,
+        ])
+
+        kde = gaussian_kde(
+            wrapped_values,
+            bw_method=0.15,
+        )
+
+        density = kde(x_grid)
+
+        # Renormalize density over the visible 0-24 hour interval
+        density = density / np.trapezoid(density, x_grid)
+
+        fig_time.add_trace(
+            go.Scatter(
+                x=x_grid,
+                y=density,
+                mode="lines",
+                name=archetype,
+                line=dict(
+                    width=3,
+                ),
+            )
+        )
+
+
+    fig_time.update_layout(
+        title="Distribution of plug-in times by archetype",
+        xaxis_title="Time of day",
+        yaxis_title="Probability density",
+        template="plotly_dark",
+        hovermode="x unified",
+    )
+
+
+    fig_time.update_xaxes(
+        range=[0, 24],
+        tickmode="array",
+        tickvals=[
+            0, 2, 4, 6, 8, 10, 12,
+            14, 16, 18, 20, 22, 24,
+        ],
+        ticktext=[
+            "00:00", "02:00", "04:00", "06:00",
+            "08:00", "10:00", "12:00", "14:00",
+            "16:00", "18:00", "20:00", "22:00",
+            "24:00",
+        ],
+    )
+
+    fig_time.update_yaxes(
+        rangemode="tozero",
+    )
+
+    st.plotly_chart(
+        fig_time,
         width="stretch",
     )
     # ============================================================

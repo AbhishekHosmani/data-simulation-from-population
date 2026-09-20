@@ -306,6 +306,13 @@ class EVSimulator:
         for day_idx in range(self.cfg.n_days):
             date = (start_date + pd.Timedelta(days=day_idx))
 
+            # Some days people are collectively more/less likely to plug in
+            daily_plugin_multiplier = np.clip(
+            self.random_number_generator.normal(loc=1.0,scale=0.20),0.50, 1.50)
+
+            # Inducing more variability through daily time shift
+            daily_time_shift = self.random_number_generator.normal(loc=0.0,scale=1.0)
+
             # Loop through each agent and simulate their driving and charging behaviour for the day.
             for agent in self.agents.itertuples(index=False):
 
@@ -327,7 +334,7 @@ class EVSimulator:
                 soc_consumed = float(driving["soc_consumed"].sum())
 
                 # 2. PLUG-IN DECISION
-                plug_probability = float(np.clip(agent.plug_frequency_per_day, 0.0, 1.0))
+                plug_probability = float(np.clip(agent.plug_frequency_per_day*daily_plugin_multiplier, 0.0, 1.0))
                 plugs_in = (self.random_number_generator.random() < plug_probability)
 
                 # No charging
@@ -338,7 +345,7 @@ class EVSimulator:
                 # 3. Generate plug-in and plug-out times with noise
                 plugin_hour = (_sample_wrapped_hour(self.random_number_generator,
                         agent.base_plugin_hour
-                        + agent.plugin_hour_offset,
+                        + agent.plugin_hour_offset + daily_time_shift,
                         self.cfg.time_noise_hours))
 
                 # Vehicle cannot plug in before its final trip of the day.
