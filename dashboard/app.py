@@ -12,14 +12,14 @@ from src.simulator import EVSimulator, SimulationConfig
 from src.validation import validation_table
 
 st.set_page_config(page_title='Axle EV Behaviour Simulator', layout='wide')
-st.title('⚡ Axle EV Behaviour Simulator')
+st.title('Axle User Behaviour Simulator')
 st.caption('Agent-based simulation of EV driver plug-in behaviour using Axle archetypes.')
 
 archetypes = load_archetypes(ROOT / 'config' / 'archetypes.csv')
 
 with st.sidebar:
     st.header('Simulation controls')
-    n_agents = st.slider('Agents', 100, 10000, 1500, 100)
+    n_agents = st.slider('Agents', 100, 5000, 1500, 100)
     n_days = st.slider('Days', 7, 90, 30)
     seed = st.number_input('Random seed', min_value=0, value=42)
     st.subheader('Behavioural variation')
@@ -69,81 +69,292 @@ st.download_button(
 
 indivisual_tab, population_tab, flexibility_tab, validation_tab = st.tabs(['Individual agent','Population', 'Flexibility', 'Validation'])
 with population_tab:
-    # ---------------------------------------------------------
-    # % of population plugged in by hour of day
-    # ---------------------------------------------------------
+    st.subheader("Population behaviour")
+    st.caption(
+        "Explore variation in charging behaviour across the simulated EV population."
+    )
 
-    plugged = timeline.copy()
+    # ============================================================
+    # ARCHETYPE FILTER
+    # ============================================================
 
-    plugged["date"] = plugged["timestamp"].dt.date
-    plugged["hour"] = plugged["timestamp"].dt.hour
+    all_archetypes = sorted(
+        st.session_state.driving["archetype"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
 
-    # Count unique agents plugged in for each date + hour.
-    # Using nunique prevents counting the same agent multiple times
-    # within an hour because timeline has 30-minute observations.
-    hourly_daily = (plugged.groupby(["date", "hour"], as_index=False).agg(
-            plugged_agents=("agent_id", "nunique")))
+    selected_archetypes = st.multiselect(
+        "Filter by driver archetype",
+        options=all_archetypes,
+        default=all_archetypes,
+        key="population_archetype_filter",
+    )
 
-    # Convert count into % of the full simulated population
-    hourly_daily["pct_agents_plugged"] = (hourly_daily["plugged_agents"] / n_agents* 100)
+    if not selected_archetypes:
+        st.warning("Select at least one archetype to view population behaviour.")
+        st.stop()
 
-    # Average the percentage across simulation days
-    hourly_population = (
-        hourly_daily
-        .groupby("hour", as_index=False)
+    # ============================================================
+    # FILTER DATA
+    # ============================================================
+
+    events = st.session_state.events[
+        st.session_state.events["archetype"].isin(selected_archetypes)
+    ].copy()
+
+    timeline = st.session_state.timeline[
+        st.session_state.timeline["archetype"].isin(selected_archetypes)
+    ].copy()
+
+    driving = st.session_state.driving[
+        st.session_state.driving["archetype"].isin(selected_archetypes)
+    ].copy()
+    
+    st.subheader("Population behaviour")
+    st.caption(
+        "Explore variation in charging behaviour across the simulated EV population."
+    )
+
+    events = st.session_state.events[
+        st.session_state.events["archetype"].isin(selected_archetypes)].copy()
+    driving = st.session_state.driving[
+        st.session_state.driving["archetype"].isin(selected_archetypes)].copy()
+    timeline = st.session_state.timeline[
+        st.session_state.timeline["archetype"].isin(selected_archetypes)].copy()
+
+    # ============================================================
+    # Summary metrics
+    # ============================================================
+
+    n_agents = driving["agent_id"].nunique()
+    n_archetypes = driving["archetype"].nunique()
+    n_days = driving["timestamp"].dt.date.nunique()
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric("EV drivers", f"{n_agents:,}")
+    col2.metric("Archetypes", n_archetypes)
+    col3.metric(
+        "Simulation days",
+        driving["timestamp"].dt.date.nunique(),
+    )
+
+    st.divider()
+
+    # ============================================================
+    # 1. POPULATION PLUG-IN BEHAVIOUR BY HOUR
+    # ============================================================
+
+    st.subheader("Population plug-in behaviour")
+
+    st.caption(
+        "Average percentage of EV drivers plugged in at each hour. "
+        "The dotted lines show the 5th–95th percentile range across simulated days."
+    )
+
+    timeline["date"] = timeline["timestamp"].dt.date
+    timeline["hour"] = timeline["timestamp"].dt.hour
+
+    # Determine whether each agent was plugged in during each hour.
+    #
+    # Because the simulation is at 30-minute resolution, max() means
+    # the agent counts as plugged in if they were connected during
+    # either timestep within the hour.
+    agent_hour = (
+        timeline
+        .groupby(
+            ["date", "hour", "agent_id"],
+            as_index=False,
+        )["plugged_in"]
+        .max()
+    )
+
+    # Number of plugged-in agents for each day/hour
+    daily_hourly = (
+        agent_hour
+        .groupby(
+            ["date", "hour"],
+            as_index=False,
+        )["plugged_in"]
+        .sum()
+    )
+
+    daily_hourly["pct_plugged"] = (
+        daily_hourly["plugged_in"]
+        / n_agents
+        * 100
+    )
+
+    # Calculate mean and population variation across simulated days
+    population_hourly = (
+        daily_hourly
+        .groupby("hour")["pct_plugged"]
         .agg(
-            pct_agents_plugged=("pct_agents_plugged", "mean")
+            mean="mean",
+            p05=lambda x: x.quantile(0.05),
+            p95=lambda x: x.quantile(0.95),
+        )
+        .reset_index()
+    )
+
+    fig = go.Figure()
+
+    # Mean behaviour
+    fig.add_trace(
+        go.Bar(
+            x=population_hourly["hour"],
+            y=population_hourly["mean"],
+            name="Average",
         )
     )
 
-    # Make sure hours with no plugged-in agents are still shown
-    all_hours = pd.DataFrame({"hour": range(24)})
-
-    hourly_population = all_hours.merge(hourly_population, on="hour",how="left")
-
-    hourly_population["pct_agents_plugged"] = (
-        hourly_population["pct_agents_plugged"]
-        .fillna(0)
+    # P95
+    fig.add_trace(
+        go.Scatter(
+            x=population_hourly["hour"],
+            y=population_hourly["p95"],
+            mode="lines",
+            name="95th percentile",
+            line=dict(
+                dash="dot",
+                width=2,
+            ),
+        )
     )
 
-    # ---------------------------------------------------------
-    # Bar chart
-    # ---------------------------------------------------------
+    # P05
+    fig.add_trace(
+        go.Scatter(
+            x=population_hourly["hour"],
+            y=population_hourly["p05"],
+            mode="lines",
+            name="5th percentile",
+            line=dict(
+                dash="dot",
+                width=2,
+            ),
+        )
+    )
 
-    fig = px.bar(
-        hourly_population,
-        x="hour",
-        y="pct_agents_plugged",
-        title="Percentage of agents plugged in by hour",
+    fig.update_layout(
+        title="% of EV drivers plugged in by hour",
+        xaxis_title="Hour of day",
+        yaxis_title="% of drivers plugged in",
+        yaxis=dict(range=[0, 100]),
+        xaxis=dict(
+            tickmode="linear",
+            tick0=0,
+            dtick=1,
+        ),
+        template="plotly_dark",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+        ),
+    )
+
+    st.plotly_chart(fig, width="stretch")
+
+    st.divider()
+
+    # ============================================================
+    # 2. VARIATION ACROSS INDIVIDUAL DRIVERS
+    # ============================================================
+
+    st.subheader("Variation across EV drivers")
+
+    st.caption(
+        "Drivers have different charging behaviour due to their "
+        "archetype and individual behavioural variation."
+    )
+
+
+
+    # Aggregate charging behaviour to the individual driver level
+    driver_stats = (events.groupby(["agent_id", "archetype"], as_index=False)
+        .agg(
+            avg_plugin_soc=("plug_in_soc", "mean"),
+            avg_plugin_hour=("plug_in_hour", "mean"),
+            avg_daily_miles=("daily_miles", "mean"),
+            avg_energy_kwh=("energy_delivered_kwh", "mean"),
+            avg_plug_duration=("plug_duration_hours", "mean"),
+        )
+    )
+
+    driver_stats["avg_plugin_soc_pct"] = (
+        driver_stats["avg_plugin_soc"] * 100
+    )
+
+
+    fig_soc = px.histogram(
+        driver_stats,
+        x="avg_plugin_soc_pct",
+        nbins=25,
+        title="Plug-in SoC across drivers",
         labels={
-            "hour": "Hour of day",
-            "pct_agents_plugged": "Agents plugged in (%)",
+            "avg_plugin_soc_pct": "Average plug-in SoC (%)"
         },
     )
 
-    fig.update_xaxes(range=[-0.5, 23.5], dtick=1)
-
-    fig.update_yaxes(range=[0, 100], ticksuffix="%")
-
-    fig.update_traces(
-        hovertemplate=(
-            "Hour: %{x}:00"
-            "<br>Agents plugged in: %{y:.1f}%"
-            "<extra></extra>"
-        )
+    fig_soc.update_layout(
+        template="plotly_dark",
+        xaxis_title="Average plug-in SoC (%)",
+        yaxis_title="Number of drivers",
+        showlegend=False,
     )
-    st.plotly_chart(fig, width="stretch")
-    # left,right = st.columns(2)
-    # with left:
-    #     fig = px.histogram(events, x='plug_in_hour', nbins=48, histnorm='probability density', title='Plug-in time distribution')
-    #     fig.update_xaxes(range=[0,24], dtick=2, title='Hour of day')
-    #     st.plotly_chart(fig, use_container_width=True)
-    # with right:
-    #     fig = px.histogram(events, x='plug_in_soc', nbins=25, histnorm='probability density', title='Plug-in SoC distribution')
-    #     fig.update_xaxes(tickformat='.0%', range=[0,1])
-    #     st.plotly_chart(fig, use_container_width=True)
-    # fig = px.box(events, x='archetype', y='plug_duration_hours', points=False, title='Plug duration by archetype')
-    # st.plotly_chart(fig, use_container_width=True)
+
+    st.plotly_chart(
+        fig_soc,
+        width="stretch",
+    )
+    # ============================================================
+    # 3. VARIATION BY ARCHETYPE
+    # ============================================================
+
+    st.subheader("Behaviour by archetype")
+
+    st.caption(
+        "Compare the distribution of plug-in battery state across "
+        "the different EV driver archetypes."
+    )
+
+    archetype_events = events.copy()
+
+    archetype_events["plug_in_soc_pct"] = (
+        archetype_events["plug_in_soc"] * 100
+    )
+
+    fig_arch = px.box(
+        archetype_events,
+        x="archetype",
+        y="plug_in_soc_pct",
+        points=False,
+        title="Plug-in SoC variation by archetype",
+        labels={
+            "archetype": "Driver archetype",
+            "plug_in_soc_pct": "Plug-in SoC (%)",
+        },
+    )
+
+    fig_arch.update_layout(
+        template="plotly_dark",
+        xaxis_title="Driver archetype",
+        yaxis_title="Plug-in SoC (%)",
+    )
+
+    fig_arch.update_yaxes(
+        range=[0, 100],
+    )
+
+    st.plotly_chart(
+        fig_arch,
+        width="stretch",
+    )
 
 with indivisual_tab:
     # 1. Select archetype

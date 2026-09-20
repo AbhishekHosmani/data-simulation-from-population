@@ -123,13 +123,13 @@ class EVSimulator:
 
         # Persistent driver-level heterogeneity
         agents["plugin_hour_offset"] = (
-            self.random_number_generator.normal(0,0.45, len(agents)))
+            self.random_number_generator.normal(0,1.45, len(agents)))
 
         agents["plugout_hour_offset"] = (
-            self.random_number_generator.normal(0, 0.45, len(agents)))
+            self.random_number_generator.normal(0, 1.45, len(agents)))
 
         agents["soc_offset"] = (
-            self.random_number_generator.normal(0, 0.025, len(agents)))
+            self.random_number_generator.normal(0, 0.25, len(agents)))
         return agents
 
     # Daily driving simulation and SoC expenditure simulations
