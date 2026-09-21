@@ -31,7 +31,7 @@ User can also pass the custom archetype.csv file as argument
 ```bash
 streamlit run dashboard/app.py -- --archetypes path/to/archetypes.csv
 
-example: run dashboard/app.py -- --archetypes '/Users/abhishekhosmani/DS_workspace/projects/Axel Take Home/data/Axle custom_archetypes.csv'
+example: streamlit run dashboard/app.py -- --archetypes '/Users/abhishekhosmani/DS_workspace/projects/Axel Take Home/data/Axle custom_archetypes.csv'
 
 ```
 
