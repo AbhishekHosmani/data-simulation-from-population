@@ -77,11 +77,32 @@ raw_data = pd.concat([
     events.assign(record_type='event'),
     timeline.assign(record_type='timeline'),
 ], ignore_index=True, sort=False)
+
+st.markdown("""
+<style>
+div.stDownloadButton > button {
+    background-color: #4DA3FF;
+    color: white;
+    font-weight: 700;
+    border: 2px solid #4DA3FF;
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+}
+
+div.stDownloadButton > button:hover {
+    background-color: #78B9FF;
+    color: white;
+    border-color: #78B9FF;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 st.download_button(
-    'Download all raw simulation data (CSV)',
-    raw_data.to_csv(index=False),
-    'axle_simulation_raw_data.csv',
-    'text/csv',
+    label ="Download all raw simulation data (CSV)",
+    data=raw_data.to_csv(index=False).encode("utf-8"),
+    file_name='axle_simulation_raw_data.csv',
+    mime='text/csv',
 )
 
 indivisual_tab, population_tab, flexibility_tab, validation_tab = st.tabs(['Individual agent','Population', 'Flexibility', 'Validation'])

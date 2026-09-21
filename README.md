@@ -44,7 +44,7 @@ python run_simulation.py
 Tests:
 
 ```bash
-pytest -q
+python -m pytest
 ```
 
 ## Dashboard
@@ -125,6 +125,7 @@ I spent less time modelling detailed journey behaviour such as simulating varied
 
 ### Known Issues
 1. Dashboard lagging with change in simulation parameters. Potential Scaling issues with generating complex pobability samplings as well as loaded UI. Need efficient data generation as well as premium UI hosting service.
+2. All raw data is in one downloadable csv. Need to split this to multiple targeted csvs as jamming all data into 1 csv will create a lot of NaN values.
 
 
 ### Design for the end use
