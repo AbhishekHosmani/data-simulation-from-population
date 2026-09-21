@@ -1,3 +1,4 @@
+import argparse
 from pathlib import Path
 import sys
 import numpy as np
@@ -17,11 +18,25 @@ st.set_page_config(page_title='Axle EV Behaviour Simulator', layout='wide')
 st.title('Axle User Behaviour Simulator')
 st.caption('Agent-based simulation of EV driver plug-in behaviour using Axle archetypes.')
 
-archetypes = load_archetypes(ROOT / 'config' / 'archetypes.csv')
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--archetypes",
+        type=Path,
+        required=False,
+        help="Path to archetypes CSV",
+        default=ROOT / "config" / "archetypes.csv",
+    )
+    args, _ = parser.parse_known_args()
+    return args
+
+args = parse_args()
+archetypes = load_archetypes(args.archetypes)
+
 
 with st.sidebar:
     st.header('Simulation controls')
-    n_agents = st.slider('Agents', 100, 5000, 1500, 100)
+    n_agents = st.slider('Agents', 100, 1000, 500, 100)
     n_days = st.slider('Days', 7, 90, 30)
     seed = st.number_input('Random seed', min_value=0, value=42)
     st.subheader('Behavioural variation')

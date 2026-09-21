@@ -6,13 +6,13 @@ A small agent-based EV driver simulator for the Axle Data Science take-home. Thi
 
 Each agent is assigned one archetype according to `% of population`. The archetype supplies battery, efficiency, charger, plug-in frequency, typical plug-in/out times, target SoC, plug-in SoC and energy-per-plug-in anchors. Agents receive persistent personal offsets, then day-level randomness is sampled around those characteristics. This creates variation both **between drivers** and **within a driver's days**.
 
-For each simulated plug event the engine:
+For each simulated plug event the simulation engine:
 1. decides whether the agent plugs in from archetype frequency
 2. samples plug-in/out times around the agent's persistent schedule
 3. samples energy need around the archetype kWh/plug-in
 4. combines the energy-implied SoC with the archetype SoC anchor and stochastic variation
 5. computes energy needed to target SoC, charging duration, end SoC and flexible idle time
-6. expands the event into a half-hourly timeline for visualisation
+6. expands the event into a half-hourly timeline (user tuneable parameter) for visualisation
 
 The engine is independent of Streamlit so it can later be exposed through FastAPI or used by optimisation/forecasting jobs without changing simulation logic.
 
@@ -23,7 +23,16 @@ The engine is independent of Streamlit so it can later be exposed through FastAP
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\\Scripts\\activate
 pip install -r requirements.txt
-streamlit run dashboard/app.py
+streamlit run dashboard/app.py 
+```
+
+User can also pass the custom archetype.csv file as argument
+
+```bash
+streamlit run dashboard/app.py -- --archetypes path/to/archetypes.csv
+
+example: run dashboard/app.py -- --archetypes '/Users/abhishekhosmani/DS_workspace/projects/Axel Take Home/data/Axle custom_archetypes.csv'
+
 ```
 
 Or generate CSV outputs without the UI:
@@ -46,26 +55,25 @@ pytest -q
 - Validation: simulation vs selected CNZ summary statistics
 - CSV download of generated plug events
 
-## Suggested next extensions
-
-1. Calibrate distribution widths from raw telemetry when available.
-2. Model explicit trips and derive SoC from trip distance rather than partially anchoring it to kWh/plug-in.
-3. Add weekday/weekend schedules and correlated behaviours.
-4. Add smart-charge scheduling in half-hour blocks against price/carbon signals.
-5. Add bump-charge/override behaviour.
-6. Expose the engine through FastAPI only when multiple clients need it.
 
 ## Notes:
 1. Our first objective is to use population characteristics to:
     * First simulate X agents, and for each agent simulate their daily driving behaviour 
     * Using their driving behaviour predict their energy consumption. Their driving decides their plug-in and plug-out time as well as SoC
+    * Aggregate usage to population level and compare it to provided referenece document (Intelligent Octopus CNZ Report)
 
 
 ## Limitations / Future Work:
-1. Need different behaviour between weekday and weekend.
+1. Add weekday/weekend schedules and correlated behaviours. (can be currently done by introducing specific archetypes)
 2. Currently plug-in decision is happending based on random draw from Bernoulli Distibution. Need a more sophesticated model to predict plug-in behaviour based on archetype and driving behaviour. 
 3. An agent can only plug-in once per day.
-
+4. Need more rigirious testing.
+5. Calibrate distribution widths from raw telemetry when available.
+6. Model explicit trips and derive SoC from trip distance rather than partially anchoring it to kWh/plug-in.
+7. Add smart-charge scheduling in half-hour blocks against price/carbon signals.
+8. Add bump-charge/override behaviour.
+9. Add more extensive testing
+10. Expose the engine through FastAPI only when multiple clients need it.
 
 ## Design Decisions, Assumptions and Trade-offs
 
@@ -117,12 +125,6 @@ I spent less time modelling detailed journey behaviour such as simulating varied
 
 ### Known Issues
 1. Dashboard lagging with change in simulation parameters. Potential Scaling issues with generating complex pobability samplings as well as loaded UI. Need efficient data generation as well as premium UI hosting service.
-
-### Future Work
-
-1. Currently plug-in decision is happending based on random draw from Bernoulli Distibution. Need a more sophesticated model to predict plug-in behaviour based on archetype and driving behaviour. 
-2. Need different behaviour between weekday and weekend.
-3. The behaviour variability in the population is too well-behaved with very little variability despite increasing simulation variance. Need to induce extreme observations 
 
 
 ### Design for the end use
