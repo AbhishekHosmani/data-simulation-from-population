@@ -333,30 +333,36 @@ class EVSimulator:
                     current_soc[agent.agent_id] = soc_after_driving
                     continue
 
-                # 3. Generate plug-in and plug-out times with noise
-                plugin_hour = (_sample_wrapped_hour(self.random_number_generator,
-                        agent.base_plugin_hour
-                        + agent.plugin_hour_offset + daily_time_shift,
-                        self.cfg.time_noise_hours))
+                # Sample plug-in and plug-out times
 
-                # Vehicle cannot plug in before its final trip of the day.
-    
-                # Add one timestep after the final trip to represent the
-                # driver returning home before connecting the vehicle.
-                minimum_plugin_hour = (last_trip_hour + self.cfg.timestep_minutes / 60.0)
-                plugin_hour = max(plugin_hour, minimum_plugin_hour)
+                if agent.archetype == "Always plugged-in":
+                    plugin_hour = 0.0
+                    plugout_hour = 23 + 59 / 60
+                else:
+                    # 3. Generate plug-in and plug-out times with noise
+                    plugin_hour = (_sample_wrapped_hour(self.random_number_generator,
+                            agent.base_plugin_hour
+                            + agent.plugin_hour_offset + daily_time_shift,
+                            self.cfg.time_noise_hours))
 
-                # Keep plug-in within the current calendar day
-                plugin_hour = min(plugin_hour,23.99)
+                    # Vehicle cannot plug in before its final trip of the day.
+        
+                    # Add one timestep after the final trip to represent the
+                    # driver returning home before connecting the vehicle.
+                    minimum_plugin_hour = (last_trip_hour + self.cfg.timestep_minutes / 60.0)
+                    plugin_hour = max(plugin_hour, minimum_plugin_hour)
 
-                plugout_hour = (
-                    _sample_wrapped_hour(
-                        self.random_number_generator,
-                        agent.base_plugout_hour
-                        + agent.plugout_hour_offset,
-                        self.cfg.time_noise_hours,
+                    # Keep plug-in within the current calendar day
+                    plugin_hour = min(plugin_hour,23.99)
+
+                    plugout_hour = (
+                        _sample_wrapped_hour(
+                            self.random_number_generator,
+                            agent.base_plugout_hour
+                            + agent.plugout_hour_offset,
+                            self.cfg.time_noise_hours,
+                        )
                     )
-                )
 
                 plug_in = _timestamp_for_hour(date,plugin_hour)
                 plug_out = _timestamp_for_hour(date,plugout_hour)

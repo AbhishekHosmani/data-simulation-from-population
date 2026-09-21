@@ -112,10 +112,7 @@ with population_tab:
         "Explore variation in charging behaviour across the simulated EV population."
     )
 
-    # ============================================================
     # ARCHETYPE FILTER
-    # ============================================================
-
     all_archetypes = sorted(
         st.session_state.driving["archetype"]
         .dropna()
@@ -134,10 +131,8 @@ with population_tab:
         st.warning("Select at least one archetype to view population behaviour.")
         st.stop()
 
-    # ============================================================
-    # FILTER DATA
-    # ============================================================
 
+    # FILTER DATA
     events = st.session_state.events[
         st.session_state.events["archetype"].isin(selected_archetypes)].copy()
 
@@ -158,10 +153,7 @@ with population_tab:
     timeline = st.session_state.timeline[
         st.session_state.timeline["archetype"].isin(selected_archetypes)].copy()
 
-    # ============================================================
     # Summary metrics
-    # ============================================================
-
     n_agents = driving["agent_id"].nunique()
     n_archetypes = driving["archetype"].nunique()
     n_days = driving["timestamp"].dt.date.nunique()
@@ -177,16 +169,11 @@ with population_tab:
 
     st.divider()
 
-    # ============================================================
     # 1. POPULATION PLUG-IN BEHAVIOUR BY HOUR
-    # ============================================================
-
     st.subheader("Population plug-in behaviour")
-
     st.caption(
         "Average percentage of EV drivers plugged in at each hour. "
-        "The dotted lines show the 5th–95th percentile range across simulated days."
-    )
+        "The dotted lines show the 5th–95th percentile range across simulated days.")
 
     timeline["date"] = timeline["timestamp"].dt.date
     timeline["hour"] = timeline["timestamp"].dt.hour
@@ -275,18 +262,12 @@ with population_tab:
             x=1,
         ),
     )
-
     st.plotly_chart(fig, width="stretch")
-
     st.divider()
 
-    # ============================================================
     # 2. VARIATION ACROSS INDIVIDUAL DRIVERS
-    # ============================================================
-# ============================================================
-# Plug-in SoC probability distribution by archetype
-# ============================================================
 
+    # Plug-in SoC probability distribution by archetype
     driver_stats = (
         events
         .groupby(
@@ -355,10 +336,8 @@ with population_tab:
         fig_soc,
         width="stretch",
     )
-    # ============================================================
-    # Plug-in time probability distribution by archetype
-    # ============================================================
 
+    # Plug-in time probability distribution by archetype
     fig_time = go.Figure()
 
     # Evaluate density from 0:00 to 24:00
@@ -446,12 +425,9 @@ with population_tab:
         width="stretch",
     )
     
-    # ============================================================
     # 3. VARIATION BY ARCHETYPE
-    # ============================================================
 
     st.subheader("Behaviour by archetype")
-
     st.caption(
         "Compare the distribution of plug-in battery state across "
         "the different EV driver archetypes."
@@ -524,10 +500,7 @@ with indivisual_tab:
 
     st.write(f"**Archetype:** {selected_archetype}")
 
-    # ---------------------------------------------------------
     # 3. Select date
-    # ---------------------------------------------------------
-
     # Use driving data so dates where the agent did NOT plug in
     # are also available in the date selector.
     agent_driving = st.session_state.driving[
@@ -544,10 +517,7 @@ with indivisual_tab:
         key="individual_date",
     )
 
-    # ---------------------------------------------------------
     # 4. Driving / SoC data for selected date
-    # ---------------------------------------------------------
-
     at = agent_driving[
         agent_driving["timestamp"].dt.date == selected_date
     ].copy()
@@ -555,10 +525,7 @@ with indivisual_tab:
     at = at.sort_values("timestamp")
 
 
-    # ---------------------------------------------------------
     # Charging timeline for selected agent/date
-    # ---------------------------------------------------------
-
     agent_charging = st.session_state.timeline[
         st.session_state.timeline["agent_id"] == selected
     ].copy()
@@ -567,11 +534,7 @@ with indivisual_tab:
         agent_charging["timestamp"].dt.date == selected_date
     ].copy()
 
-
-    # ---------------------------------------------------------
     # Charging events overlapping selected date
-    # ---------------------------------------------------------
-
     day_start = pd.Timestamp(selected_date)
     day_end = day_start + pd.Timedelta(days=1)
 
@@ -582,20 +545,11 @@ with indivisual_tab:
 
 
     if not at.empty:
-
         # Rename original driving SoC
-        at = at.rename(
-            columns={
-                "soc": "driving_soc"
-            }
-        )
+        at = at.rename(columns={"soc": "driving_soc"})
 
-        # -----------------------------------------------------
         # Merge charging SoC onto driving timeline
-        # -----------------------------------------------------
-
         if not charging_day.empty:
-
             charging_day = charging_day[
                 [
                     "timestamp",
@@ -609,33 +563,15 @@ with indivisual_tab:
                 }
             )
 
-            at = at.merge(
-                charging_day,
-                on="timestamp",
-                how="left",
-            )
+            at = at.merge(charging_day, on="timestamp",how="left")
 
             # Use charging SoC whenever charging timeline exists.
             # Otherwise use the normal driving SoC.
-            at["soc"] = (
-                at["charging_soc"]
-                .combine_first(at["driving_soc"])
-            )
-
-            at["plugged_in"] = (
-                at["plugged_in"]
-                .fillna(False)
-                .astype(bool)
-            )
-
-            at["charging"] = (
-                at["charging"]
-                .fillna(False)
-                .astype(bool)
-            )
+            at["soc"] = (at["charging_soc"].combine_first(at["driving_soc"]))
+            at["plugged_in"] = (at["plugged_in"].fillna(False).astype(bool))
+            at["charging"] = (at["charging"].fillna(False).astype(bool))
 
         else:
-
             # No charging occurred on this date
             at["soc"] = at["driving_soc"]
             at["plugged_in"] = False
@@ -643,10 +579,8 @@ with indivisual_tab:
 
 
         # Convert timestamp into decimal hour
-        at["hour_of_day"] = (
-            at["timestamp"].dt.hour
-            + at["timestamp"].dt.minute / 60.0
-        )
+        at["hour_of_day"] = (at["timestamp"].dt.hour
+            + at["timestamp"].dt.minute / 60.0)
 
         # Convert SoC from 0-1 to percentage
         at["soc_pct"] = at["soc"] * 100
@@ -682,13 +616,8 @@ with indivisual_tab:
                 day_end,
             )
 
-            x0 = (
-                visible_start - day_start
-            ).total_seconds() / 3600.0
-
-            x1 = (
-                visible_end - day_start
-            ).total_seconds() / 3600.0
+            x0 = (visible_start - day_start).total_seconds() / 3600.0
+            x1 = (visible_end - day_start).total_seconds() / 3600.0
 
             fig.add_vrect(
                 x0=x0,
@@ -698,50 +627,6 @@ with indivisual_tab:
                 line_width=0,
                 layer="below",
             )
-            # plug_in_hour = (
-            #     event.plug_in.hour
-            #     + event.plug_in.minute / 60.0
-            # )
-
-            # plug_out_hour = (
-            #     event.plug_out.hour
-            #     + event.plug_out.minute / 60.0
-            # )
-
-            # # If plug-out is on the following day,
-            # # split the shading around midnight.
-            # if event.plug_out.date() > event.plug_in.date():
-
-            #     # Midnight -> plug-out
-            #     fig.add_vrect(
-            #         x0=0,
-            #         x1=plug_out_hour,
-            #         fillcolor="dodgerblue",
-            #         opacity=0.45,
-            #         line_width=0,
-            #         layer="below",
-            #     )
-
-            #     # Plug-in -> midnight
-            #     fig.add_vrect(
-            #         x0=plug_in_hour,
-            #         x1=24,
-            #         fillcolor="dodgerblue",
-            #         opacity=0.45,
-            #         line_width=0,
-            #         layer="below",
-            #     )
-
-            # else:
-            #     # Plug-in and plug-out occur on same day
-            #     fig.add_vrect(
-            #         x0=plug_in_hour,
-            #         x1=plug_out_hour,
-            #         fillcolor="dodgerblue",
-            #         opacity=0.45,
-            #         line_width=0,
-            #         layer="below",
-            #     )
 
         # ---------------------------------------------------------
         # 7. Chart formatting
